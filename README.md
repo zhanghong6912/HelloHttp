@@ -1,5 +1,5 @@
 # HelloHttp
-适用于Android App的小型Http请求框架，接口定义类似于Volley，请求优先级的实现也是借鉴Volley的，但HelloHttp核心实现思路都是原创，并不是精简版的Volley
+适用于Android App的小型Http请求框架，接口定义类似于Volley，请求优先级的实现也是借鉴Volley的，但HelloHttp核心实现思路都是原创，并不是精简版的Volley。
 
 ## 为什么会写这样一个东西？
 Http请求的框架很多，而且它们功能强大、性能优秀，比如Volley、OkHttp、Retrofit等等，为什么要自己写而不直接用？况且自己写的话性能和稳定性肯定没有上述几个那么好。
