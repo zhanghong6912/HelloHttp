@@ -48,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
                 // do something
             }
         });
+        // set priority(optional)
+//        request.setPriority(Request.Priority.HIGH);
         // add request into request queue
         mRequestQueue.add(request);
     }

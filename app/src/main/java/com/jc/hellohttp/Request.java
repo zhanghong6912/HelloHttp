@@ -16,6 +16,7 @@
 package com.jc.hellohttp;
 
 import android.graphics.Bitmap;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
@@ -23,9 +24,9 @@ import java.util.Map;
 
 /**
  * Created by Zhang on 2017/7/7.<br/>
- * Description: 封装http请求
+ * Description: 封装http请求，通过构造方法决定不同的请求类型和请求方式
  */
-public class Request {
+public class Request implements Comparable<Request> {
 
     /**
      * http请求方式，暂时仅支持GET和POST
@@ -42,12 +43,10 @@ public class Request {
     }
 
     /**
-     * -----备用-----
-     * http请求优先级，分为四个等级：低；中；高；立即
+     * http请求优先级，分为四个等级：低；普通；高；立即
      */
     public enum Priority {
-        // TODO: 2017/7/9
-        LOW, MEDIUM, HIGH, IMMEDIATE
+        LOW, NORMAL, HIGH, IMMEDIATE
     }
 
     /**
@@ -70,10 +69,19 @@ public class Request {
      * 请求参数（针对POST请求）
      */
     private Map<String, String> mRequestParams;
+    /**
+     * 请求优先级，默认为NORMAL
+     */
+    private Priority mPriority = Priority.NORMAL;
+    /**
+     * 序列号，用于当两个请求优先级相等时，比较其排队顺序
+     */
+    private Integer mSequence;
 
-    private int mBmpWidth = 0;
-    private int mBmpHeight = 0;
-    private Bitmap.Config mBitmapConfig;
+    // 与ImageRequest相关的参数
+    private int mBmpWidth = 0; // 所需图片的宽度，0表示不压缩图片
+    private int mBmpHeight = 0; // 所需图片的宽度，0表示不压缩图片
+    private Bitmap.Config mBitmapConfig = Bitmap.Config.ARGB_8888; // 所需图片的品质，默认为最高品质
 
     public Request(String url, RequestType type, RequestCallback callback) {
         if (url == null || TextUtils.isEmpty(url)) {
@@ -154,6 +162,35 @@ public class Request {
 
     Bitmap.Config getBitmapConfig() {
         return mBitmapConfig;
+    }
+
+    Priority getPriority() {
+        return mPriority;
+    }
+
+    // 设为public，目的是让用户在构造一个请求时也能为其设置优先级
+    public void setPriority(Priority priority) {
+        if (priority != null)
+            this.mPriority = priority;
+    }
+
+    Integer getSequence() {
+        if (mSequence == null) {
+            throw new IllegalStateException("\'getSequence()\' called before \'setSequence()\'");
+        }
+        return mSequence;
+    }
+
+    void setSequence(Integer mSequence) {
+        this.mSequence = mSequence;
+    }
+
+    @Override
+    public int compareTo(@NonNull Request another) {
+        Priority left = this.getPriority();
+        Priority right = another.getPriority();
+        // 比较优先级，如果优先级相等则比较之前设置的序列号
+        return left == right ? this.mSequence - another.mSequence : right.ordinal() - left.ordinal();
     }
 
 }

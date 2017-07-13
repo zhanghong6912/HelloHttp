@@ -28,7 +28,8 @@ class Config {
     /**
      * 默认核心线程池大小
      */
-    static final int CORE_SIZE = getDefCoreSize();
+//    static final int CORE_SIZE = getDefCoreSize();
+    static final int CORE_SIZE = 4;
     /**
      * 连接超时时间
      */
@@ -38,12 +39,15 @@ class Config {
      */
     static final int READ_TIMEOUT = 5000;
 
+    static boolean quit = false;
+
     private static int getDefCoreSize() {
         // 根据CPU核心数（包括超线程）决定默认线程池的大小。
         int processors = Runtime.getRuntime().availableProcessors();
-        if (processors < 4) return 4;
-        if (processors > 8) return 8;
-        return processors;
+//        if (processors < 4) return 4;
+//        if (processors > 8) return 8;
+//        return processors;
+        return processors < 4 ? 4 : (processors > 8 ? 8 : processors);
     }
 
 }

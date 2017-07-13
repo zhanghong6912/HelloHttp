@@ -41,9 +41,13 @@ import java.util.Map;
  */
 class HttpExecutor extends Thread {
 
-    static final Object mSynLock = new Object();
+    private static final String TAG = HttpExecutor.class.getSimpleName();
 
-    private boolean shouldLoop = true;
+//    static final Object mSynLock = new Object();
+
+//    private boolean shouldLoop = true;
+
+    private static final Object mDecodeLock = new Object();
 
     private boolean interrupted = false;
 
@@ -62,28 +66,53 @@ class HttpExecutor extends Thread {
 
     @Override
     public void run() {
-        while (shouldLoop) {
-            if (!mWaitingArea.getRequestsFromWaitingArea().isEmpty()) {
-                Request request = mWaitingArea.getRequestsFromWaitingArea().remove(0);
-                switch (request.getRequestMethod()) {
-                    case GET:
-                        performGetRequest(request);
-                        break;
-                    case POST:
-                        performPostRequest(request);
-                        break;
+        while (!interrupted) {
+            Request request;
+            try {
+                request = mWaitingArea.getRequestsFromWaitingArea().take();
+            } catch (InterruptedException e) {
+//                e.printStackTrace();
+                if (interrupted) {
+                    Log.i(TAG, TAG + ": thread id = " + Thread.currentThread().getId() + " has been interrupted...");
+                    return;
                 }
-            } else {
-                synchronized (mSynLock) {
-                    try {
-                        Log.i("HttpExecutor", "Waiting area: Thread id = " + Thread.currentThread().getId() + " has no request, thread is waiting...");
-                        mSynLock.wait();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
+                continue;
+            }
+            switch (request.getRequestMethod()) {
+                case GET:
+                    performGetRequest(request);
+                    break;
+                case POST:
+                    performPostRequest(request);
+                    break;
             }
         }
+//        while (shouldLoop) {
+//            if (!mWaitingArea.getRequestsFromWaitingArea().isEmpty()) {
+//                Request request = mWaitingArea.getRequestsFromWaitingArea().remove(0);
+//                switch (request.getRequestMethod()) {
+//                    case GET:
+//                        performGetRequest(request);
+//                        break;
+//                    case POST:
+//                        performPostRequest(request);
+//                        break;
+//                }
+//            } else {
+//                synchronized (mSynLock) {
+//                    try {
+//                        Log.i("HttpExecutor", "Waiting area: Thread id = " + Thread.currentThread().getId() + " has no request, thread is waiting...");
+//                        mSynLock.wait();
+//                    } catch (InterruptedException e) {
+//                        if (!shouldLoop || Config.quit) {
+//                            Log.i("HttpExecutor", "Waiting area: Thread id = " + this.getId() + ", exiting loop...");
+//                            return;
+//                        }
+//                        e.printStackTrace();
+//                    }
+//                }
+//            }
+//        }
     }
 
     private void performGetRequest(Request request) {
@@ -101,13 +130,20 @@ class HttpExecutor extends Thread {
                             postResponse(response, request.getCallback());
                             break;
                         case IMAGE:
-                            Bitmap bitmap = getCompressedBitmap(mConnection.getInputStream(),
-                                    request.getBmpWidth(), request.getBmpHeight(), request.getBitmapConfig());
-                            postResponse(bitmap, request.getCallback());
+                            // FIXME: 2017/7/13 避免同时解码多张图片
+//                            synchronized (mDecodeLock) {
+                            try {
+                                Bitmap bitmap = getCompressedBitmap(mConnection.getInputStream(),
+                                        request.getBmpWidth(), request.getBmpHeight(), request.getBitmapConfig());
+                                postResponse(bitmap, request.getCallback());
+                            } catch (OutOfMemoryError error) {
+                                throw new RuntimeException("OutOfMemoryError caught! request url: " + request.getUrl());
+                            }
+//                            }
                             break;
                     }
                 } else {
-                    Log.e("HelloHttp", "Request\' url = " + request.getUrl() + "\'has been interrupted...");
+                    Log.e(TAG, "Request: \'url = " + request.getUrl() + "\' has been interrupted...");
                     //noinspection UnnecessaryReturnStatement
                     return;
                 }
@@ -137,8 +173,7 @@ class HttpExecutor extends Thread {
                     mConnection.setRequestProperty("Content-Type", Config.JSON_REQ_PROP);
                     break;
                 case IMAGE:
-                    // TODO: 2017/7/10
-                    mConnection.setRequestProperty("Content-Type", Config.STRING_REQ_PROP);
+//                    mConnection.setRequestProperty("Content-Type", Config.STRING_REQ_PROP);
                     break;
             }
             if (request.getRequestParams() != null && !request.getRequestParams().isEmpty()) {
@@ -156,13 +191,19 @@ class HttpExecutor extends Thread {
                             postResponse(response, request.getCallback());
                             break;
                         case IMAGE:
-                            Bitmap bitmap = getCompressedBitmap(mConnection.getInputStream(),
-                                    request.getBmpWidth(), request.getBmpHeight(), request.getBitmapConfig());
-                            postResponse(bitmap, request.getCallback());
+//                            synchronized (mDecodeLock) {
+                            try {
+                                Bitmap bitmap = getCompressedBitmap(mConnection.getInputStream(),
+                                        request.getBmpWidth(), request.getBmpHeight(), request.getBitmapConfig());
+                                postResponse(bitmap, request.getCallback());
+                            } catch (OutOfMemoryError error) {
+                                throw new RuntimeException("OutOfMemoryError caught! request url: " + request.getUrl());
+                            }
+//                            }
                             break;
                     }
                 } else {
-                    Log.e("HelloHttp", "Request\' url = " + request.getUrl() + "\'has been interrupted...");
+                    Log.e(TAG, "Request: \'url = " + request.getUrl() + "\' has been interrupted...");
                     //noinspection UnnecessaryReturnStatement
                     return;
                 }
@@ -242,9 +283,9 @@ class HttpExecutor extends Thread {
     /**
      * 根据给定的图片宽高压缩图片，如果给定的宽或高为0则不压缩图片
      *
-     * @param inputStream     图片的输入流
-     * @param width  目标宽度
-     * @param height 目标高度
+     * @param inputStream 图片的输入流
+     * @param width       目标宽度
+     * @param height      目标高度
      * @return 压缩后的图片
      */
     private Bitmap getCompressedBitmap(InputStream inputStream, int width, int height, Bitmap.Config config) {
@@ -283,15 +324,16 @@ class HttpExecutor extends Thread {
     }
 
     void interruptExecutor() {
-        shouldLoop = false;
+//        shouldLoop = false;
         interrupted = true;
         if (mConnection != null) {
             mConnection.disconnect();
         }
-        Log.i("HttpExecutor", "Waiting area: Thread id = " + this.getId() + ", exiting loop...");
-        synchronized (mSynLock) {
-            mSynLock.notify();
-        }
+        interrupt();
+//        Log.i("HttpExecutor", "Waiting area: Thread id = " + this.getId() + ", exiting loop...");
+//        synchronized (mSynLock) {
+//            mSynLock.notify();
+//        }
     }
 
 }

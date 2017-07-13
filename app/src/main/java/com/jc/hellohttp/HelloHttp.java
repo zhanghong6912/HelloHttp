@@ -30,6 +30,7 @@ public class HelloHttp {
 
     public static void stop(RequestQueue queue) {
 //        RequestQueue.getInstance().stopRequestQueue();
+        Config.quit = true;
         queue.stopRequestQueue();
     }
 

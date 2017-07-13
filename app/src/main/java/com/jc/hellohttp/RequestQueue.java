@@ -15,6 +15,8 @@
  */
 package com.jc.hellohttp;
 
+import android.util.Log;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,8 +25,9 @@ import java.util.List;
  * Description: http请求队列，封装了http请求等候区
  */
 public final class RequestQueue {
+    private static final String TAG = RequestQueue.class.getSimpleName();
 
-    // RequestQueue在此处不能是静态的，否则会造成调用stop()之后RequestQueue中的所有资源无法释放。（为什么?）
+    // RequestQueue在此处不能是静态的，否则会造成调用stop()之后RequestQueue中的所有资源无法释放。
 //    private static RequestQueue mInstance;
 //
 //    static synchronized RequestQueue getInstance() {
@@ -34,40 +37,50 @@ public final class RequestQueue {
 //        return mInstance;
 //    }
 
+    private List<RequestWaitingArea> mWaitingAreas;
+
     public RequestQueue() {
         mWaitingAreas = new ArrayList<>();
     }
-
-    private List<RequestWaitingArea> mWaitingAreas;
 
     /**
      * 添加一个http请求
      *
      * @param request --
+     * @return 请求是否成功加入队列
      */
-    public void add(Request request) {
+    public boolean add(Request request) {
+        if (request == null) {
+            Log.e(TAG, "request = null, add failed...");
+            return false;
+        }
+        // FIXME: 2017/7/13 如何做到调用stop()之后不再加入请求，而又避免调用stop()之后再次启动也无法加入请求?
+//        if (Config.quit) {
+//            Log.e(TAG, "RequestQueue id already stopped, add failed...");
+//            return false;
+//        }
         RequestWaitingArea properArea = null;
         if (mWaitingAreas.isEmpty()) {
             // 请求等候区为空
             properArea = new RequestWaitingArea();
             properArea.addRequest(request);
             mWaitingAreas.add(properArea);
-            return;
+            return true;
         }
         // 请求等候区不为空，先看已存在的等候区是否有空队列
         for (int i = 0; i < mWaitingAreas.size(); i++) {
             if (mWaitingAreas.get(i).getRequestCount() == 0) {
                 properArea = mWaitingAreas.get(i);
                 properArea.addRequest(request);
-                return;
+                return true;
             }
         }
         // 请求等候区不为空，且没有空队列，则看等候区数量是否超过上限
         if (mWaitingAreas.size() < Config.CORE_SIZE) {
             // 未超过上限，则再创建一个新的等候区队列
             properArea = new RequestWaitingArea();
-            properArea.addRequest(request);
             mWaitingAreas.add(properArea);
+            properArea.addRequest(request);
         } else {
             // 已达到上限，且每个等候区都不是空队列，则选择一个请求数量最少的队列
             properArea = chooseProperArea();
@@ -77,6 +90,7 @@ public final class RequestQueue {
             }
             properArea.addRequest(request);
         }
+        return true;
     }
 
     private RequestWaitingArea chooseProperArea() {
