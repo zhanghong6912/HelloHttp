@@ -39,7 +39,7 @@ public class Request implements Comparable<Request> {
      * http请求的类型，类似于Volley中的StringRequest, JsonRequest, ImageRequest
      */
     public enum RequestType {
-        STRING, JSON, IMAGE
+        STRING, JSON, IMAGE, @Deprecated DOWNLOAD, UPLOAD
     }
 
     /**

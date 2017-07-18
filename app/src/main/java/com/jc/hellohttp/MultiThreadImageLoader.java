@@ -21,7 +21,6 @@ import android.graphics.BitmapFactory;
 import android.support.annotation.Nullable;
 import android.support.v4.util.LruCache;
 import android.util.Log;
-import android.widget.BaseAdapter;
 import android.widget.ImageView;
 
 import java.io.File;
@@ -31,9 +30,8 @@ import java.io.FileOutputStream;
 /**
  * Created by Zhang on 2017/7/12.<br/>
  * Description: 多线程的实现后台加载图片，并将图片缓存至文件<br/>
- * 使用方法：1.实例化ImageLoader。2.为控件设置Tag，Tag的值为图片的url地址（必要）。3.调用into()方法，传递必要参数。<br/>
+ * 使用方法：1.实例化ImageLoader。2.调用into()方法，传递必要参数。<br/>
  * 已实现：内存缓存、文件缓存、与HelloHttp整合的下载队列<br/>
- * 待优化：避免同时解码多张图片造成卡顿；避免ListView中不为控件设置Tag就可能会出现的图片显示错乱的问题
  */
 public class MultiThreadImageLoader {
 
@@ -48,19 +46,18 @@ public class MultiThreadImageLoader {
      * Context
      */
     private Context mContext;
-
     /**
      * 请求队列
      */
     private RequestQueue mRequestQueue;
 
-    private BaseAdapter mAdapter;
+//    private BaseAdapter mAdapter;
 
-    public MultiThreadImageLoader(Context context, RequestQueue requestQueue, @Nullable BaseAdapter adapter) {
+    public MultiThreadImageLoader(Context context, RequestQueue requestQueue/*, @Nullable BaseAdapter adapter*/) {
         this.mContext = context;
         this.mCache = new LruCache<>(maxMemoCacheSize);
         this.mRequestQueue = requestQueue;
-        this.mAdapter = adapter;
+//        this.mAdapter = adapter;
     }
 
     /**
@@ -72,22 +69,21 @@ public class MultiThreadImageLoader {
      * @param height          指定的高度
      * @param defaultBmpResId 默认图片资源id
      */
-    // 缺陷：如果同时加入的下载任务量过多，比如ListView中，会因同时解码多张图片而出现滑动过程中明显的掉帧甚至卡顿
     public void into(final ImageView intoView, final String url, int width, int height, final int defaultBmpResId) {
         // 先设置默认图片
-        if (url.equals(intoView.getTag())) {
-            intoView.setImageResource(defaultBmpResId);
-        }
+//        if (url.equals(intoView.getTag())) {
+        intoView.setImageResource(defaultBmpResId);
+//        }
 
         Bitmap bitmap = null;
         // 先到内存缓存中查询
         bitmap = mCache.get(url);
         if (bitmap != null) {
             // 保存的Bitmap还存在
-            Log.i(TAG, "Bitmap loaded from memory...");
-            if (url.equals(intoView.getTag())) {
-                intoView.setImageBitmap(bitmap);
-            }
+//            Log.i(TAG, "Bitmap loaded from memory...");
+//            if (url.equals(intoView.getTag())) {
+            intoView.setImageBitmap(bitmap);
+//            }
             return;
         }
 
@@ -98,10 +94,10 @@ public class MultiThreadImageLoader {
             // 文件缓存中存在指定的Bitmap
             // 将Bitmap保存到内存缓存
             mCache.put(url, bitmap);
-            if (url.equals(intoView.getTag())) {
-                intoView.setImageBitmap(bitmap);
-            }
-            Log.i(TAG, "Bitmap loaded from file...");
+//            if (url.equals(intoView.getTag())) {
+            intoView.setImageBitmap(bitmap);
+//            }
+//            Log.i(TAG, "Bitmap loaded from file...");
             return;
         }
 
@@ -113,34 +109,34 @@ public class MultiThreadImageLoader {
             @Override
             public void onSuccess(Object response) {
                 if (response != null && response instanceof Bitmap) {
-                    if (url.equals(intoView.getTag())) {
-                        intoView.setImageBitmap((Bitmap) response);
-                        if (mAdapter != null) {
-                            // 避免图片已经下载，但是列表不自动更新
-                            mAdapter.notifyDataSetChanged();
-                        }
-                    }
+//                    if (url.equals(intoView.getTag())) {
+                    intoView.setImageBitmap((Bitmap) response);
+//                        if (mAdapter != null) {
+//                             // 避免图片已经下载，但是列表不自动更新
+//                            mAdapter.notifyDataSetChanged();
+//                        }
+//                    }
                     // 将压缩后的图片放入内存缓存
                     mCache.put(url, (Bitmap) response);
                     // 将压缩后的图片放入文件缓存
                     saveBitmap((Bitmap) response,
                             new File(mContext.getApplicationContext().getCacheDir() + "/image" + url.substring(url.lastIndexOf("/"))));
-                    Log.i(TAG, "Bitmap loaded from network...");
+//                    Log.i(TAG, "Bitmap loaded from network...");
                 }
             }
 
             @Override
             public void onError(String errorMsg) {
                 intoView.setImageResource(defaultBmpResId);
-                if (mAdapter != null) {
-                    mAdapter.notifyDataSetChanged();
-                }
+//                if (mAdapter != null) {
+//                    mAdapter.notifyDataSetChanged();
+//                }
                 Log.e(TAG, errorMsg);
             }
         }, wid, hei, Bitmap.Config.ARGB_8888);
         request.setPriority(Request.Priority.LOW); // 设为低优先级
         if (!mRequestQueue.add(request)) {
-            Log.e(TAG, "An error occurred while the image load task joined the request queue...");
+            Log.e(TAG, "An error occurred while the imageRequest joined the request queue...");
         }
     }
 

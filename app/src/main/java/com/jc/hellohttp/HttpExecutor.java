@@ -16,7 +16,7 @@
 package com.jc.hellohttp;
 
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
@@ -24,7 +24,8 @@ import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -37,17 +38,15 @@ import java.util.Map;
 
 /**
  * Created by Zhang on 2017/7/10.<br/>
- * Description: http请求的执行者，从http请求等候区中按照FIFO的规则取出http请求并执行，得到响应后通过回调的方式将结果投递到主线程
+ * Description: http请求的执行者，默认从http请求等候区中按照FIFO的规则取出http请求并执行，得到响应后通过回调的方式将结果投递到主线程
  */
 class HttpExecutor extends Thread {
 
     private static final String TAG = HttpExecutor.class.getSimpleName();
 
-//    static final Object mSynLock = new Object();
-
 //    private boolean shouldLoop = true;
 
-    private static final Object mDecodeLock = new Object();
+//    private static final Object mDecodeLock = new Object();
 
     private boolean interrupted = false;
 
@@ -56,7 +55,9 @@ class HttpExecutor extends Thread {
      * HttpURLConnection
      */
     private HttpURLConnection mConnection;
-
+    /**
+     * 请求等候区，内部封装了无边界的阻塞队列
+     */
     private RequestWaitingArea mWaitingArea;
 
     public HttpExecutor(RequestWaitingArea area) {
@@ -130,17 +131,36 @@ class HttpExecutor extends Thread {
                             postResponse(response, request.getCallback());
                             break;
                         case IMAGE:
-                            // FIXME: 2017/7/13 避免同时解码多张图片
-//                            synchronized (mDecodeLock) {
                             try {
-                                Bitmap bitmap = getCompressedBitmap(mConnection.getInputStream(),
+                                Bitmap bitmap = HelloHttp.getCompressedBitmap(mConnection.getInputStream(),
                                         request.getBmpWidth(), request.getBmpHeight(), request.getBitmapConfig());
                                 postResponse(bitmap, request.getCallback());
                             } catch (OutOfMemoryError error) {
                                 throw new RuntimeException("OutOfMemoryError caught! request url: " + request.getUrl());
                             }
-//                            }
                             break;
+                        case DOWNLOAD:
+                            String fileName = request.getUrl().substring(request.getUrl().lastIndexOf("/") + 1);
+                            File downloadFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
+                            if (downloadFile.exists()) {
+                                if (downloadFile.isFile() && downloadFile.delete()) {
+                                    Log.i(TAG, "File:" + fileName + "already exists, delete and downloadReq again...");
+                                }
+                            }
+                            FileOutputStream outputStream = new FileOutputStream(downloadFile);
+                            InputStream fileInput = mConnection.getInputStream();
+                            byte[] buffer = new byte[1024 * 8];
+                            int length = 0;
+                            while ((length = fileInput.read(buffer)) != -1) {
+                                outputStream.write(buffer, 0, length);
+                                outputStream.flush();
+                            }
+                            outputStream.close();
+                            postResponse("downloadReq success", request.getCallback());
+                            break;
+                        case UPLOAD:
+                            throw new IllegalStateException("Cannot upload file through \'GET\' request");
+//                            break;
                     }
                 } else {
                     Log.e(TAG, "Request: \'url = " + request.getUrl() + "\' has been interrupted...");
@@ -175,6 +195,11 @@ class HttpExecutor extends Thread {
                 case IMAGE:
 //                    mConnection.setRequestProperty("Content-Type", Config.STRING_REQ_PROP);
                     break;
+                case DOWNLOAD:
+                    break;
+                case UPLOAD:
+                    // TODO: 2017/7/14
+                    break;
             }
             if (request.getRequestParams() != null && !request.getRequestParams().isEmpty()) {
                 String paramsStr = encodeParams(request.getRequestParams(), Config.PARAMS_ENCODING);
@@ -191,15 +216,38 @@ class HttpExecutor extends Thread {
                             postResponse(response, request.getCallback());
                             break;
                         case IMAGE:
-//                            synchronized (mDecodeLock) {
                             try {
-                                Bitmap bitmap = getCompressedBitmap(mConnection.getInputStream(),
+                                Bitmap bitmap = HelloHttp.getCompressedBitmap(mConnection.getInputStream(),
                                         request.getBmpWidth(), request.getBmpHeight(), request.getBitmapConfig());
                                 postResponse(bitmap, request.getCallback());
                             } catch (OutOfMemoryError error) {
                                 throw new RuntimeException("OutOfMemoryError caught! request url: " + request.getUrl());
                             }
-//                            }
+                            break;
+                        case DOWNLOAD:
+                            // 强制设置为低优先级
+                            request.setPriority(Request.Priority.LOW);
+                            String fileName = request.getUrl().substring(request.getUrl().lastIndexOf("/") + 1);
+                            File downloadFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
+                            if (downloadFile.exists()) {
+                                if (downloadFile.isFile() && downloadFile.delete()) {
+                                    Log.i(TAG, "File:" + fileName + "already exists, delete and downloadReq again...");
+                                }
+                            }
+                            FileOutputStream outputStream = new FileOutputStream(downloadFile);
+                            InputStream fileInput = mConnection.getInputStream();
+                            byte[] buffer = new byte[1024 * 8];
+                            int length = 0;
+                            while ((length = fileInput.read(buffer)) != -1) {
+                                outputStream.write(buffer, 0, length);
+                                outputStream.flush();
+                            }
+                            outputStream.close();
+                            postResponse("Download success. Download request is deprecated, if you want to download file(s), please use \'android.app.DownloadManager\' instead."
+                                    , request.getCallback());
+                            break;
+                        case UPLOAD:
+                            // TODO: 2017/7/14
                             break;
                     }
                 } else {
@@ -280,48 +328,48 @@ class HttpExecutor extends Thread {
         }
     }
 
-    /**
-     * 根据给定的图片宽高压缩图片，如果给定的宽或高为0则不压缩图片
-     *
-     * @param inputStream 图片的输入流
-     * @param width       目标宽度
-     * @param height      目标高度
-     * @return 压缩后的图片
-     */
-    private Bitmap getCompressedBitmap(InputStream inputStream, int width, int height, Bitmap.Config config) {
-        try {
-            // 将输入流中的数据读入数组中
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1024 * 8];
-            int length = 0;
-            while ((length = inputStream.read(buffer)) != -1) {
-                byteArrayOutputStream.write(buffer, 0, length);
-                byteArrayOutputStream.flush();
-            }
-            byte[] bytes = byteArrayOutputStream.toByteArray();
-            byteArrayOutputStream.close();
-            // 解析byte[]数组，获取图片原始尺寸
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            // 仅加载边界属性
-            options.inJustDecodeBounds = true;
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-            // 根据原始尺寸计算压缩比例
-            int scale = 1;
-            if (width != 0 && height != 0) {
-                int scaleW = options.outWidth / width;
-                int scaleH = options.outHeight / height;
-                scale = scaleW > scaleH ? scaleW : scaleH;
-            }
-            // 再次解析byte[]数组，获取Bitmap
-            options.inJustDecodeBounds = false;
-            options.inPreferredConfig = config;
-            options.inSampleSize = scale;
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
+//    /**
+//     * 根据给定的图片宽高压缩图片，如果给定的宽或高为0则不压缩图片
+//     *
+//     * @param inputStream 图片的输入流
+//     * @param width       目标宽度
+//     * @param height      目标高度
+//     * @return 压缩后的图片
+//     */
+//    private Bitmap getCompressedBitmap(InputStream inputStream, int width, int height, Bitmap.Config config) {
+//        try {
+//            // 将输入流中的数据读入数组中
+//            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+//            byte[] buffer = new byte[1024 * 8];
+//            int length = 0;
+//            while ((length = inputStream.read(buffer)) != -1) {
+//                byteArrayOutputStream.write(buffer, 0, length);
+//                byteArrayOutputStream.flush();
+//            }
+//            byte[] bytes = byteArrayOutputStream.toByteArray();
+//            byteArrayOutputStream.close();
+//            // 解析byte[]数组，获取图片原始尺寸
+//            BitmapFactory.Options options = new BitmapFactory.Options();
+//            // 仅加载边界属性
+//            options.inJustDecodeBounds = true;
+//            BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+//            // 根据原始尺寸计算压缩比例
+//            int scale = 1;
+//            if (width != 0 && height != 0) {
+//                int scaleW = options.outWidth / width;
+//                int scaleH = options.outHeight / height;
+//                scale = scaleW > scaleH ? scaleW : scaleH;
+//            }
+//            // 再次解析byte[]数组，获取Bitmap
+//            options.inJustDecodeBounds = false;
+//            options.inPreferredConfig = config;
+//            options.inSampleSize = scale;
+//            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            return null;
+//        }
+//    }
 
     void interruptExecutor() {
 //        shouldLoop = false;

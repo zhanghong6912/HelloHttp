@@ -41,9 +41,10 @@ import java.util.concurrent.LinkedBlockingDeque;
  * Description: 单线程、单下载队列的ImageLoader，适用于同时下载任务量不太多，单个任务下载数据量也不大的情况，比如ListView中。实现后台加载图片，并将图片缓存至文件<br/>
  * 使用方法：1.实例化ImageLoader。2.调用into()方法，传递必要参数。3.在不需要使用ImageLoader时调用stopImageLoadTask()方法停止任务队列。<br/>
  * 已实现：内存缓存、文件缓存、下载队列<br/>
- * 待优化：实现任务队列适时自动停止；实现任务优先级
+ * 待优化：实现任务队列适时自动停止
  */
 public class SingleThreadImageLoader {
+
     private static final String TAG = SingleThreadImageLoader.class.getSimpleName();
     /**
      * 内存缓存
@@ -60,10 +61,17 @@ public class SingleThreadImageLoader {
      * 下载任务队列，排序规则：FIFO
      */
     private BlockingQueue<ImageLoadTask> mTaskQueue = new LinkedBlockingDeque<>();
-
+    /**
+     * 网络请求队列是否被打断
+     */
     private boolean interrupted = false;
-
+    /**
+     * 网络请求线程
+     */
     private final Thread mImageLoadThread;
+    /**
+     * Handler
+     */
     private ShowImageHandler mHandler;
 
     public SingleThreadImageLoader(Context context) {

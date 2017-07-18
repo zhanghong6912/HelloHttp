@@ -22,9 +22,10 @@ import java.util.List;
 
 /**
  * Created by Zhang on 2017/7/7.<br/>
- * Description: http请求队列，封装了http请求等候区
+ * Description: http请求队列，封装了有边界的http请求等候区
  */
 public final class RequestQueue {
+
     private static final String TAG = RequestQueue.class.getSimpleName();
 
     // RequestQueue在此处不能是静态的，否则会造成调用stop()之后RequestQueue中的所有资源无法释放。
@@ -54,7 +55,7 @@ public final class RequestQueue {
             Log.e(TAG, "request = null, add failed...");
             return false;
         }
-        // FIXME: 2017/7/13 如何做到调用stop()之后不再加入请求，而又避免调用stop()之后再次启动也无法加入请求?
+        // FIXME: 2017/7/13 如何做到调用stop()之后不再加入请求，而又避免调用stop()之后再次启动却也无法加入请求?
 //        if (Config.quit) {
 //            Log.e(TAG, "RequestQueue id already stopped, add failed...");
 //            return false;
@@ -86,7 +87,8 @@ public final class RequestQueue {
             properArea = chooseProperArea();
             if (properArea == null) {
                 // FIXME: 2017/7/11 如果得到的properArea为null，则证明chooseProperArea()的算法有误
-                properArea = mWaitingAreas.get(0);
+//                properArea = mWaitingAreas.get(0);
+                throw new NullPointerException("Error assignment! Method \'chooseProperArea()\' returned a null value!");
             }
             properArea.addRequest(request);
         }
