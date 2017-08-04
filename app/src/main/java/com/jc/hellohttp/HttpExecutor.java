@@ -231,7 +231,7 @@ class HttpExecutor extends Thread {
                             File downloadFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName);
                             if (downloadFile.exists()) {
                                 if (downloadFile.isFile() && downloadFile.delete()) {
-                                    Log.i(TAG, "File:" + fileName + "already exists, delete and downloadReq again...");
+                                    Log.i(TAG, "File:" + fileName + "already exists, delete and download again...");
                                 }
                             }
                             FileOutputStream outputStream = new FileOutputStream(downloadFile);

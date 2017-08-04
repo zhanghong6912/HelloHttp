@@ -20,6 +20,8 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.Map;
 
 /**
@@ -84,8 +86,8 @@ public class Request implements Comparable<Request> {
     private Bitmap.Config mBitmapConfig = Bitmap.Config.ARGB_8888; // 所需图片的品质，默认为最高品质
 
     public Request(String url, RequestType type, RequestCallback callback) {
-        if (url == null || TextUtils.isEmpty(url)) {
-            throw new IllegalArgumentException("Unsupported url");
+        if (!checkURL(url)) {
+            url = convertURL(url);
         }
         this.mUrl = url;
         this.mRequestType = type;
@@ -93,8 +95,8 @@ public class Request implements Comparable<Request> {
     }
 
     public Request(String url, RequestType type, RequestMethod method, RequestCallback callback) {
-        if (url == null || TextUtils.isEmpty(url)) {
-            throw new IllegalArgumentException("Unsupported url");
+        if (!checkURL(url)) {
+            url = convertURL(url);
         }
         this.mUrl = url;
         this.mRequestType = type;
@@ -104,8 +106,8 @@ public class Request implements Comparable<Request> {
 
     // 适用于带请求参数的POST请求
     public Request(String url, RequestType type, Map<String, String> params, RequestCallback callback) {
-        if (url == null || TextUtils.isEmpty(url)) {
-            throw new IllegalArgumentException("Unsupported url");
+        if (!checkURL(url)) {
+            url = convertURL(url);
         }
         this.mUrl = url;
         this.mRequestType = type;
@@ -117,8 +119,8 @@ public class Request implements Comparable<Request> {
     // 适用于ImageRequest，指定的BitmapConfig为null时，将采用默认配置：不压缩图片，且Bitmap.Config为ARGB_8888，即最高品质
     public Request(String url, RequestType type, RequestMethod method, Map<String, String> params, RequestCallback callback,
                    int bmpWidth, int bmpHeight, @Nullable Bitmap.Config bmpConfig) {
-        if (url == null || TextUtils.isEmpty(url)) {
-            throw new IllegalArgumentException("Unsupported url");
+        if (!checkURL(url)) {
+            url = convertURL(url);
         }
         this.mUrl = url;
         this.mRequestType = type;
@@ -183,6 +185,41 @@ public class Request implements Comparable<Request> {
 
     void setSequence(Integer mSequence) {
         this.mSequence = mSequence;
+    }
+
+    /**
+     * 检查URL是否有效，并检查URL中是否含有中文
+     *
+     * @param url 未知URL
+     * @return URL无效 -- 抛出异常；含有中文 -- false；不含中文 -- true
+     */
+    private boolean checkURL(String url) {
+        if (url == null || TextUtils.isEmpty(url)) {
+            throw new IllegalArgumentException("Unsupported url --> target url is empty");
+        }
+        return url.getBytes().length == url.length();
+    }
+
+    /**
+     * 将含有中文的URL转成UTF-8编码
+     *
+     * @param url 含有中文的URL
+     * @return 转换后的URL
+     */
+    private String convertURL(String url) {
+        StringBuilder stringBuilder = new StringBuilder();
+        try {
+            for (int i = 0; i < url.length(); i++) {
+                if (url.charAt(i) > 127) {
+                    stringBuilder.append(URLEncoder.encode(String.valueOf(url.charAt(i)), "utf-8"));
+                } else {
+                    stringBuilder.append(String.valueOf(url.charAt(i)));
+                }
+            }
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        return stringBuilder.toString();
     }
 
     @Override
